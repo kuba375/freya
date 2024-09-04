@@ -16,50 +16,147 @@ fn main() {
 
 fn app() -> Element {
     rsx!(
-        Router::<PrimaryRoute> {},
-        Router::<DocumentRoute> {}
+        Router::<TabsRoute> {}
+        Router::<DocumentRoute> {},
     )
 }
 
 #[derive(Routable, Clone, PartialEq)]
 #[rustfmt::skip]
-pub enum PrimaryRoute {
-    #[layout(AppSidebar)]
-        #[route("/")]
-        Home,
-        #[route("/Document")]
-        Document,
+pub enum TabsRoute {
+    #[layout(TabLayout)]
+    #[route("/")]
+    Home,
+    #[route("/document")]
+    Document,
     #[end_layout]
     #[route("/..route")]
     PageNotFound { },
 }
 
+#[derive(Routable, Clone, PartialEq)]
+#[rustfmt::skip]
+pub enum DocumentRoute {
+    #[layout(Document)]
+    #[route("/")]
+    DocumentOverview,
+    #[route("/details")]
+    DocumentDetails,
+    #[end_layout]
+    #[route("/..route")]
+    DocumentPageNotFound { },
+}
+
 #[allow(non_snake_case)]
 #[component]
-fn AppSidebar() -> Element {
+fn TabLayout() -> Element {
+    rsx!(
+        NativeRouter {
+            Tabsbar {
+                Link {
+                    to: TabsRoute::Home,
+                    ActivableRoute {
+                        route: TabsRoute::Home,
+                        exact: true,
+                        Tab {
+                            label {
+                                "Home"
+                            }
+                        }
+                    }
+                },
+                Link {
+                    to: TabsRoute::Document,
+                    ActivableRoute {
+                        route: TabsRoute::Document,
+                        Tab {
+                            label {
+                                "Document"
+                            }
+                        }
+                    }
+                },
+                Link {
+                    to: TabsRoute::Document,
+                    ActivableRoute {
+                        route: TabsRoute::Document,
+                        Tab {
+                            label {
+                                "Another document"
+                            }
+                        }
+                    }
+                },
+            }
+            Body {
+                rect {
+                    main_align: "center",
+                    cross_align: "center",
+                    width: "100%",
+                    height: "100%",
+                    Outlet::<TabsRoute> {  }
+                }
+            }
+        }
+    )
+}
+
+#[allow(non_snake_case)]
+#[component]
+fn DocumentOverview() -> Element {
+    rsx!(
+        label {
+            "Overview. (path: '/')"
+        }
+    )
+}
+
+#[allow(non_snake_case)]
+#[component]
+fn DocumentDetails() -> Element {
+    rsx!(
+        label {
+            "Details (path: '/details')"
+        }
+    )
+}
+
+#[allow(non_snake_case)]
+#[component]
+fn DocumentPageNotFound() -> Element {
+    rsx!(
+        label {
+            "Document 404!! 😵"
+        }
+    )
+}
+
+#[allow(non_snake_case)]
+#[component]
+fn Document() -> Element {
     rsx!(
         NativeRouter {
             Sidebar {
                 sidebar: rsx!(
                     Link {
-                        to: PrimaryRoute::Home,
+                        to: DocumentRoute::DocumentOverview,
                         ActivableRoute {
-                            route: PrimaryRoute::Home,
+                            route: DocumentRoute::DocumentOverview,
                             exact: true,
                             SidebarItem {
                                 label {
-                                    "Go to Hey ! 👋"
+                                    "Overview"
                                 }
                             },
                         }
                     },
                     Link {
-                        to: PrimaryRoute::Document,
+                        to: DocumentRoute::DocumentDetails,
                         ActivableRoute {
-                            route: PrimaryRoute::Document,
+                            route: DocumentRoute::DocumentDetails,
                             SidebarItem {
                                 label {
-                                    "Go to Document! 👈"
+                                    "Details"
                                 }
                             },
                         }
@@ -77,7 +174,7 @@ fn AppSidebar() -> Element {
                         cross_align: "center",
                         width: "100%",
                         height: "100%",
-                        Outlet::<PrimaryRoute> {  }
+                        Outlet::<DocumentRoute> {  }
                     }
                 }
             }
@@ -90,7 +187,7 @@ fn AppSidebar() -> Element {
 fn Home() -> Element {
     rsx!(
         label {
-            "Just some text 😗 in /"
+            "Home Tab Content"
         }
     )
 }
@@ -101,92 +198,6 @@ fn PageNotFound() -> Element {
     rsx!(
         label {
             "404!! 😵"
-        }
-    )
-}
-
-#[derive(Routable, Clone, PartialEq)]
-#[rustfmt::skip]
-pub enum DocumentRoute {
-    #[layout(Document)]
-    #[route("/")]
-    DocumentHome,
-    #[route("/details")]
-    DocumentDetails,
-    #[end_layout]
-    #[route("/..route")]
-    DocumentPageNotFound { },
-}
-
-#[allow(non_snake_case)]
-#[component]
-fn Document() -> Element {
-    rsx!(
-        NativeRouter {
-            Tabsbar {
-                Link {
-                    to: DocumentRoute::DocumentHome,
-                    ActivableRoute {
-                        route: DocumentRoute::DocumentHome,
-                        exact: true,
-                        Tab {
-                            label {
-                                "Home"
-                            }
-                        }
-                    }
-                },
-                Link {
-                    to: DocumentRoute::DocumentDetails,
-                    ActivableRoute {
-                        route: DocumentRoute::DocumentDetails,
-                        Tab {
-                            label {
-                                "Details"
-                            }
-                        }
-                    }
-                },
-            }
-            Body {
-                rect {
-                    main_align: "center",
-                    cross_align: "center",
-                    width: "100%",
-                    height: "100%",
-                    Outlet::<DocumentRoute> {  }
-                }
-            }
-        }
-    )
-}
-
-#[allow(non_snake_case)]
-#[component]
-fn DocumentHome() -> Element {
-    rsx!(
-        label {
-            "home. (path: '/')"
-        }
-    )
-}
-
-#[allow(non_snake_case)]
-#[component]
-fn DocumentDetails() -> Element {
-    rsx!(
-        label {
-            "details (path: '/details')"
-        }
-    )
-}
-
-#[allow(non_snake_case)]
-#[component]
-fn DocumentPageNotFound() -> Element {
-    rsx!(
-        label {
-            "Document 404!! 😵"
         }
     )
 }
