@@ -108,7 +108,7 @@ fn PageNotFound() -> Element {
 #[derive(Routable, Clone, PartialEq)]
 #[rustfmt::skip]
 pub enum DocumentRoute {
-    #[layout(AppSidebar)]
+    #[layout(Document)]
     #[route("/")]
     DocumentHome,
     #[route("/details")]
