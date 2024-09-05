@@ -11,6 +11,7 @@ fn main() {
 }
 
 struct Document {
+    name: String,
     content: String,
 }
 
@@ -19,8 +20,8 @@ static mut DOCUMENTS: Option<HashMap<String, Document>> = None;
 
 pub fn load_documents() {
     let map = HashMap::from([
-        ("document_1".to_string(), Document { content: "Document 1".to_string() }),
-        ("document_2".to_string(), Document { content: "Document 2".to_string() }),
+        ("document_1".to_string(), Document { name: "Document 1".to_string(), content: "Content 1".to_string() }),
+        ("document_2".to_string(), Document { name: "Document 2".to_string(), content: "Content 2".to_string() }),
     ]);
 
     unsafe { DOCUMENTS.replace(map); }
@@ -42,6 +43,7 @@ mod tabbed_ui {
 
     // Tabbed UI has dependencies on the tabs it uses
     use crate::document::DocumentContainer;
+    use crate::DOCUMENTS;
 
     #[derive(Routable, Clone, PartialEq)]
     #[rustfmt::skip]
@@ -60,6 +62,14 @@ mod tabbed_ui {
     #[allow(non_snake_case)]
     #[component]
     pub fn TabContainer() -> Element {
+
+        let _document_ids = use_context_provider(|| {
+            let document_ids: Vec<(String, String)> = unsafe { DOCUMENTS.as_ref().unwrap() }.iter().map(|(key, value)|{
+                (key.clone(), value.name.clone())
+            }).collect();
+            Signal::new(document_ids)
+        });
+
         rsx!(
             Router::<TabsRoute> {}
         )
@@ -68,6 +78,11 @@ mod tabbed_ui {
     #[allow(non_snake_case)]
     #[component]
     fn TabLayout() -> Element {
+        let document_ids_signal: Signal<Vec<(String, String)>> = use_context();
+        let document_ids = document_ids_signal.read();
+        let mut sorted_document_ids = document_ids.clone();
+        sorted_document_ids.sort();
+
         rsx!(
             NativeRouter {
                 rect {
@@ -86,28 +101,20 @@ mod tabbed_ui {
                                 }
                             }
                         },
-                        Link {
-                            to: TabsRoute::DocumentTab { id: "document_1".to_string() },
-                            ActivableRoute {
-                                route: TabsRoute::DocumentTab { id: "document_1".to_string() },
-                                Tab {
-                                    label {
-                                        "Document 1"
+                        for (id, name) in sorted_document_ids.iter() {
+                            Link {
+                                key: "{id.clone()}",
+                                to: TabsRoute::DocumentTab { id: id.clone() },
+                                ActivableRoute {
+                                    route: TabsRoute::DocumentTab { id: id.clone() },
+                                    Tab {
+                                        label {
+                                            "{name}"
+                                        }
                                     }
                                 }
                             }
-                        },
-                        Link {
-                            to: TabsRoute::DocumentTab { id: "document_2".to_string() },
-                            ActivableRoute {
-                                route: TabsRoute::DocumentTab { id: "document_2".to_string() },
-                                Tab {
-                                    label {
-                                        "Document 2"
-                                    }
-                                }
-                            }
-                        },
+                        }
                     }
                 },
                 Body {
@@ -129,7 +136,7 @@ mod tabbed_ui {
         println!("DocumentTab. id: {}", id);
 
         rsx!(
-            DocumentContainer { id: id }
+            DocumentContainer { id }
         )
     }
 
