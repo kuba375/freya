@@ -4,340 +4,255 @@
 )]
 
 use std::collections::HashMap;
+use dioxus_router::{hooks::use_route, prelude::{
+    navigator, Outlet, Routable, Router, RouterConfig, RouterConfigFactory
+}, router};
 use freya::prelude::*;
 
 fn main() {
-    launch_with_props(app, "Split Routing Example", (550.0, 400.0));
+    launch_with_props(app, "Router Example", (550.0, 400.0));
 }
+
+static DOCUMENTS_ROUTER: GlobalSignal<DocumentRoute> = GlobalSignal::new(|| DocumentRoute::DocumentOverview);
 
 struct Document {
-    name: String,
     content: String,
-}
-
-// FIXME Temporarily using a `static mut` and unsafe code, maybe use once_cell or similar for this example
-static mut DOCUMENTS: Option<HashMap<String, Document>> = None;
-
-pub fn load_documents() {
-    let map = HashMap::from([
-        ("document_1".to_string(), Document { name: "Document 1".to_string(), content: "Content 1".to_string() }),
-        ("document_2".to_string(), Document { name: "Document 2".to_string(), content: "Content 2".to_string() }),
-    ]);
-
-    unsafe { DOCUMENTS.replace(map); }
 }
 
 fn app() -> Element {
 
-    load_documents();
+    let _documents = use_context_provider(|| {
+        let mut documents_map = HashMap::<String, Document>::new();
+        documents_map.insert("document_1".to_string(), Document { content: "Document 1".to_string() });
+        documents_map.insert("document_2".to_string(), Document { content: "Document 2".to_string() });
+
+        Signal::new(documents_map)
+    });
+
+    let _active_tab = use_context_provider(|| Signal::new(Option::<String>::None));
 
     rsx!(
-        tabbed_ui::TabContainer { }
+        Router::<TabsRoute> {}
     )
 }
 
-mod tabbed_ui {
-    use dioxus_router::prelude::{Outlet, Routable, Router};
-    use freya::components::*;
-    use freya::prelude::*;
+#[derive(Routable, Clone, PartialEq)]
+#[rustfmt::skip]
+pub enum TabsRoute {
+    #[layout(TabLayout)]
+    #[route("/")]
+    Home,
+    #[route("/document/:id")]
+    DocumentContainer { id: String },
+    #[end_layout]
+    #[route("/..route")]
+    PageNotFound { },
+}
 
-    // Tabbed UI has dependencies on the tabs it uses
-    use crate::document::DocumentContainer;
-    use crate::DOCUMENTS;
+#[derive(Routable, Clone, PartialEq)]
+#[rustfmt::skip]
+pub enum DocumentRoute {
+    #[layout(DocumentLayout)]
+    #[route("/")]
+    DocumentOverview,
+    #[route("/content")]
+    DocumentContent,
+    #[end_layout]
+    #[route("/..route")]
+    DocumentPageNotFound { },
+}
 
-    #[derive(Routable, Clone, PartialEq)]
-    #[rustfmt::skip]
-    pub enum TabsRoute {
-        #[layout(TabLayout)]
-        #[route("/")]
-        HomeTab,
-        #[route("/document/:id")]
-        DocumentTab { id: String },
-        #[end_layout]
-        #[route("/..route")]
-        PageNotFound { },
-    }
-
-    /// Note: this is the ONLY public function
-    #[allow(non_snake_case)]
-    #[component]
-    pub fn TabContainer() -> Element {
-
-        let _document_ids = use_context_provider(|| {
-            let document_ids: Vec<(String, String)> = unsafe { DOCUMENTS.as_ref().unwrap() }.iter().map(|(key, value)|{
-                (key.clone(), value.name.clone())
-            }).collect();
-            Signal::new(document_ids)
-        });
-
-        rsx!(
-            Router::<TabsRoute> {}
-        )
-    }
-
-    #[allow(non_snake_case)]
-    #[component]
-    fn TabLayout() -> Element {
-        let document_ids_signal: Signal<Vec<(String, String)>> = use_context();
-        let document_ids = document_ids_signal.read();
-        let mut sorted_document_ids = document_ids.clone();
-        sorted_document_ids.sort();
-
-        rsx!(
-            NativeRouter {
-                rect {
-                    background: "#444444",
-                    width: "fill",
-                    Tabsbar {
-                        Link {
-                            to: TabsRoute::HomeTab,
-                            ActivableRoute {
-                                route: TabsRoute::HomeTab,
-                                exact: true,
-                                Tab {
-                                    label {
-                                        "Home"
-                                    }
-                                }
-                            }
-                        },
-                        for (id, name) in sorted_document_ids.iter() {
-                            Link {
-                                key: "{id.clone()}",
-                                to: TabsRoute::DocumentTab { id: id.clone() },
-                                ActivableRoute {
-                                    route: TabsRoute::DocumentTab { id: id.clone() },
-                                    Tab {
-                                        label {
-                                            "{name}"
-                                        }
-                                    }
+#[allow(non_snake_case)]
+#[component]
+fn TabLayout() -> Element {
+    rsx!(
+        NativeRouter {
+            rect {
+                background: "#444444",
+                width: "fill",
+                Tabsbar {
+                    Link {
+                        to: TabsRoute::Home,
+                        ActivableRoute {
+                            route: TabsRoute::Home,
+                            exact: true,
+                            Tab {
+                                label {
+                                    "Home"
                                 }
                             }
                         }
-                    }
-                },
+                    },
+                    Link {
+                        to: TabsRoute::DocumentContainer { id: "document_1".to_string() },
+                        ActivableRoute {
+                            route: TabsRoute::DocumentContainer { id: "document_1".to_string() },
+                            Tab {
+                                label {
+                                    "Document 1"
+                                }
+                            }
+                        }
+                    },
+                    Link {
+                        to: TabsRoute::DocumentContainer { id: "document_2".to_string() },
+                        ActivableRoute {
+                            route: TabsRoute::DocumentContainer { id: "document_2".to_string() },
+                            Tab {
+                                label {
+                                    "Document 2"
+                                }
+                            }
+                        }
+                    },
+                }
+            },
+            Body {
+                rect {
+                    main_align: "center",
+                    cross_align: "center",
+                    width: "fill",
+                    height: "fill",
+                    Outlet::<TabsRoute> {  }
+                }
+            }
+        }
+    )
+}
+
+
+#[allow(non_snake_case)]
+#[component]
+fn DocumentLayout() -> Element {
+    let route = use_route::<DocumentRoute>();
+    let active_tab: Signal<Option::<String>> = use_context();
+    let id = active_tab.clone().unwrap();
+
+    println!("document layout. id: {}", id);
+
+    use_effect(use_reactive!(|route| {
+        *DOCUMENTS_ROUTER.write_unchecked() = route;
+        println!("UPDATED");
+    }));
+
+    rsx!(
+        NativeRouter {
+            Sidebar {
+                sidebar: rsx!(
+                    Link {
+                        to: DocumentRoute::DocumentOverview,
+                        ActivableRoute {
+                            route: DocumentRoute::DocumentOverview,
+                            exact: true,
+                            SidebarItem {
+                                label {
+                                    "Overview"
+                                }
+                            }
+                        }
+                    },
+                    Link {
+                        to: DocumentRoute::DocumentContent,
+                        ActivableRoute {
+                            route: DocumentRoute::DocumentContent,
+                            SidebarItem {
+                                label {
+                                    "Content"
+                                }
+                            }
+                        }
+                    },
+                ),
                 Body {
                     rect {
                         main_align: "center",
                         cross_align: "center",
                         width: "fill",
                         height: "fill",
-                        Outlet::<TabsRoute> {  }
+                        Outlet::<DocumentRoute> {  }
                     }
                 }
             }
-        )
-    }
-
-    #[allow(non_snake_case)]
-    #[component]
-    fn DocumentTab(id: String) -> Element {
-        println!("DocumentTab. id: {}", id);
-
-        rsx!(
-            DocumentContainer { id }
-        )
-    }
-
-    #[allow(non_snake_case)]
-    #[component]
-    fn HomeTab() -> Element {
-        rsx!(
-            label {
-                "Home Tab Content"
-            }
-        )
-    }
-
-    #[allow(non_snake_case)]
-    #[component]
-    fn PageNotFound() -> Element {
-        rsx!(
-            label {
-                "404!! 😵"
-            }
-        )
-    }
+        }
+    )
 }
 
-///
-/// Document UI - should have know knowledge or dependencies on the tabbed UI
-///
-mod document {
-    use dioxus_router::prelude::{Outlet, Routable, Router};
-    use freya::prelude::*;
-    use crate::{DOCUMENTS};
+#[allow(non_snake_case)]
+#[component]
+fn DocumentOverview() -> Element {
+    let active_tab: Signal<Option::<String>> = use_context();
+    let id = active_tab.clone().unwrap();
 
-    /// This route should not have any document ids in the paths.  "/" should refer to 'the current document'
-    #[derive(Routable, Clone, PartialEq)]
-    #[rustfmt::skip]
-    enum DocumentRoute {
-        #[layout(DocumentLayout)]
-        #[route("/")]
-        DocumentOverview,
-        #[route("/content")]
-        DocumentContent,
-        #[end_layout]
-        #[route("/..route")]
-        DocumentPageNotFound {},
-    }
+    println!("overview. id: {}", id);
 
-    /// Note: this is the ONLY public function
-    #[allow(non_snake_case)]
-    #[component]
-    pub fn DocumentContainer(id: String) -> Element {
-        println!("DocumentContainer. id: {}", id);
-
-        // Use a signal to store the id, so it can be used by DocumentContent and DocumentOverview
-        let id_signal = use_context_provider(|| Signal::new(Some(id.clone())));
-
-        // Update the signal with a potentially new id.
-        let id = match id_signal() {
-            Some(id_from_signal) if id.ne(&id_from_signal) => {
-                println!("id from signal is different. id: {}, id_from_signal: {}", &id, &id_from_signal);
-                Some(id.clone())
-            },
-            Some(id_from_signal) => {
-                println!("id from signal is the same. id: {}, id_from_signal: {}", &id, &id_from_signal);
-                Some(id_from_signal.clone())
-            },
-            None => {
-                println!("no id yet");
-                None
-            }
-        };
-
-        let id_for_hook = id.clone();
-        use_effect(move || {
-            let mut id_signal: Signal<Option::<String>> = use_context();
-            id_signal.set(id_for_hook.clone());
-        });
-
-        if let Some(id_to_use) = id.clone() {
-            println!("have id, id_to_use: {}", id_to_use);
-            rsx!(
-                Router::<DocumentRoute> {}
-            )
-        } else {
-            println!("waiting for id");
-            rsx!(
-                label {
-                    "loading"
-                }
-            )
+    rsx!(
+        label {
+            "Overview. (path: '/', id: {id:})"
         }
-    }
+    )
+}
 
-    #[allow(non_snake_case)]
-    #[component]
-    fn DocumentLayout() -> Element {
-        let id_signal: Signal<Option::<String>> = use_context();
-        let id = id_signal.clone().unwrap();
+#[allow(non_snake_case)]
+#[component]
+fn DocumentContent() -> Element {
+    let active_tab: Signal<Option::<String>> = use_context();
+    let id = active_tab.clone().unwrap();
 
-        println!("DocumentLayout. id: {}", id);
+    println!("content. id: {}", id);
 
-        rsx!(
-            NativeRouter {
-                Sidebar {
-                    sidebar: rsx!(
-                        Link {
-                            to: DocumentRoute::DocumentOverview,
-                            ActivableRoute {
-                                route: DocumentRoute::DocumentOverview,
-                                exact: true,
-                                SidebarItem {
-                                    label {
-                                        "Overview"
-                                    }
-                                }
-                            }
-                        },
-                        Link {
-                            to: DocumentRoute::DocumentContent,
-                            ActivableRoute {
-                                route: DocumentRoute::DocumentContent,
-                                SidebarItem {
-                                    label {
-                                        "Content"
-                                    }
-                                }
-                            }
-                        },
-                    ),
-                    Body {
-                        rect {
-                            main_align: "center",
-                            cross_align: "center",
-                            width: "fill",
-                            height: "fill",
-                            Outlet::<DocumentRoute> {  }
-                        }
-                    }
-                }
-            }
-        )
-    }
+    let documents_signal: Signal<HashMap<String, Document>> = use_context();
+    let documents = documents_signal.read();
+    let document = documents.get(&id).unwrap();
 
-    #[allow(non_snake_case)]
-    #[component]
-    fn DocumentOverview() -> Element {
-        let id_signal: Signal<Option::<String>> = use_context();
-        let id = id_signal.clone().unwrap();
-
-        println!("DocumentOverview. id: {}", id);
-
-        rsx!(
-            label {
-                "Overview. (path: '/', id: {id:})"
-            }
-        )
-    }
-
-    #[allow(non_snake_case)]
-    #[component]
-    fn DocumentContent() -> Element {
-        let id_signal: Signal<Option::<String>> = use_context();
-        let id = id_signal.clone().unwrap();
-
-        println!("DocumentContent. id: {}", id);
-
-        let document_resource = use_resource(move || {
-            let id = id.clone();
-            async move {
-                // FIXME: Using a static mut (but in read-only mode and which is only written once on app startup)
-                let result = unsafe { DOCUMENTS.as_ref().unwrap().get(&id) };
-
-                result
-            }
-        });
-        let document = document_resource.read();
-
-        match &*document {
-            Some(Some(document)) => {
-                rsx!(
-                    label {
-                        { format!("{}", document.content)}
-                    }
-                )
-            },
-            _ => {
-                rsx!(
-                    label {
-                        "Error"
-                    }
-                )
-            }
+    rsx!(
+        label {
+            { format!("{}", document.content)}
         }
-    }
+    )
+}
 
-    #[allow(non_snake_case)]
-    #[component]
-    fn DocumentPageNotFound() -> Element {
-        rsx!(
-            label {
-                "Document 404!! 😵"
-            }
-        )
-    }
+#[allow(non_snake_case)]
+#[component]
+fn DocumentPageNotFound() -> Element {
+    rsx!(
+        label {
+            "Document 404!! 😵"
+        }
+    )
+}
+
+
+#[allow(non_snake_case)]
+#[component]
+fn DocumentContainer(id: String) -> Element {
+    println!("id: {}", id);
+
+    let mut active_tab: Signal<Option::<String>> = use_context();
+    active_tab.replace(Some(id));
+
+    rsx!(
+        Router::<DocumentRoute> {
+            config: || RouterConfig::default().initial_route(DOCUMENTS_ROUTER())
+        }
+    )
+}
+
+#[allow(non_snake_case)]
+#[component]
+fn Home() -> Element {
+    rsx!(
+        label {
+            "Home Tab Content"
+        }
+    )
+}
+
+#[allow(non_snake_case)]
+#[component]
+fn PageNotFound() -> Element {
+    rsx!(
+        label {
+            "404!! 😵"
+        }
+    )
 }
