@@ -169,20 +169,32 @@ mod document {
     use freya::prelude::*;
     use crate::{DOCUMENTS};
 
-    static DOCUMENTS_ROUTER: GlobalSignal<DocumentRoute> = GlobalSignal::new(|| DocumentRoute::DocumentOverview);
+    struct DocumentItem {
+        id: String,
+    }
 
-    /// This route should not have any document ids in the paths.  "/" should refer to 'the current document'
+    static DOCUMENTS_ROUTER: GlobalSignal<Option<DocumentRoute>> = GlobalSignal::new(|| None);
+
     #[derive(Routable, Clone, PartialEq)]
     #[rustfmt::skip]
     enum DocumentRoute {
-        #[layout(DocumentLayout)]
-        #[route("/")]
-        DocumentOverview,
-        #[route("/content")]
-        DocumentContent,
-        #[end_layout]
+        #[nest("/:id")]
+            #[layout(DocumentLayout)]
+            #[route("/")]
+            DocumentOverview { id: String },
+            #[route("/content")]
+            DocumentContent { id: String },
+            #[end_layout]
+        #[end_nest]
         #[route("/..route")]
         DocumentPageNotFound {},
+    }
+
+    impl DocumentRoute {
+        pub fn id(&self) -> String {
+            let mut id_signal: Signal<String> = use_context();
+            id_signal()
+        }
     }
 
     /// Note: this is the ONLY public function
@@ -192,58 +204,44 @@ mod document {
         println!("DocumentContainer. id: {}", id);
 
         // Use a signal to store the id, so it can be used by DocumentContent and DocumentOverview
-        let id_signal = use_context_provider(|| Signal::new(Some(id.clone())));
+        let id_signal = use_context_provider(|| Signal::new(id.clone()));
 
         // Update the signal with a potentially new id.
         let id = match id_signal() {
-            Some(id_from_signal) if id.ne(&id_from_signal) => {
+            id_from_signal if id.ne(&id_from_signal) => {
                 println!("id from signal is different. id: {}, id_from_signal: {}", &id, &id_from_signal);
-                Some(id.clone())
+                id.clone()
             },
-            Some(id_from_signal) => {
+            id_from_signal => {
                 println!("id from signal is the same. id: {}, id_from_signal: {}", &id, &id_from_signal);
-                Some(id_from_signal.clone())
-            },
-            None => {
-                println!("no id yet");
-                None
+                id_from_signal.clone()
             }
         };
 
         let id_for_hook = id.clone();
         use_effect(move || {
-            let mut id_signal: Signal<Option::<String>> = use_context();
+            let mut id_signal: Signal<String> = use_context();
             id_signal.set(id_for_hook.clone());
         });
 
-        if let Some(id_to_use) = id.clone() {
-            println!("have id, id_to_use: {}", id_to_use);
-            rsx!(
-                Router::<DocumentRoute> {
-                    config: || RouterConfig::default().initial_route(DOCUMENTS_ROUTER())
-                }
-            )
-        } else {
-            println!("waiting for id");
-            rsx!(
-                label {
-                    "loading"
-                }
-            )
-        }
+        *DOCUMENTS_ROUTER.write_unchecked() = Some(DocumentRoute::DocumentOverview { id: id.clone() });
+
+        rsx!(
+            Router::<DocumentRoute> {
+                config: || RouterConfig::default().initial_route(DOCUMENTS_ROUTER().unwrap())
+            }
+        )
     }
 
     #[allow(non_snake_case)]
     #[component]
-    fn DocumentLayout() -> Element {
+    fn DocumentLayout(id: String) -> Element {
         let route = use_route::<DocumentRoute>();
-        let id_signal: Signal<Option::<String>> = use_context();
-        let id = id_signal.clone().unwrap();
 
         println!("DocumentLayout. id: {}", id);
 
         use_effect(use_reactive!(|route| {
-            *DOCUMENTS_ROUTER.write_unchecked() = route;
+            *DOCUMENTS_ROUTER.write_unchecked() = Some(route);
             println!("UPDATED");
         }));
 
@@ -252,9 +250,9 @@ mod document {
                 Sidebar {
                     sidebar: rsx!(
                         Link {
-                            to: DocumentRoute::DocumentOverview,
+                            to: DocumentRoute::DocumentOverview { id: id.clone() },
                             ActivableRoute {
-                                route: DocumentRoute::DocumentOverview,
+                                route: DocumentRoute::DocumentOverview { id: id.clone() },
                                 exact: true,
                                 SidebarItem {
                                     label {
@@ -264,9 +262,9 @@ mod document {
                             }
                         },
                         Link {
-                            to: DocumentRoute::DocumentContent,
+                            to: DocumentRoute::DocumentContent { id: id.clone() },
                             ActivableRoute {
-                                route: DocumentRoute::DocumentContent,
+                                route: DocumentRoute::DocumentContent { id: id.clone() },
                                 SidebarItem {
                                     label {
                                         "Content"
@@ -291,10 +289,7 @@ mod document {
 
     #[allow(non_snake_case)]
     #[component]
-    fn DocumentOverview() -> Element {
-        let id_signal: Signal<Option::<String>> = use_context();
-        let id = id_signal.clone().unwrap();
-
+    fn DocumentOverview(id: String) -> Element {
         println!("DocumentOverview. id: {}", id);
 
         rsx!(
@@ -306,10 +301,7 @@ mod document {
 
     #[allow(non_snake_case)]
     #[component]
-    fn DocumentContent() -> Element {
-        let id_signal: Signal<Option::<String>> = use_context();
-        let id = id_signal.clone().unwrap();
-
+    fn DocumentContent(id: String) -> Element {
         println!("DocumentContent. id: {}", id);
 
         let document_resource = use_resource(move || {
