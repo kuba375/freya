@@ -169,10 +169,6 @@ mod document {
     use freya::prelude::*;
     use crate::{DOCUMENTS};
 
-    struct DocumentItem {
-        id: String,
-    }
-
     static DOCUMENTS_ROUTER: GlobalSignal<Option<DocumentRoute>> = GlobalSignal::new(|| None);
 
     #[derive(Routable, Clone, PartialEq)]
@@ -188,13 +184,6 @@ mod document {
         #[end_nest]
         #[route("/..route")]
         DocumentPageNotFound {},
-    }
-
-    impl DocumentRoute {
-        pub fn id(&self) -> String {
-            let mut id_signal: Signal<String> = use_context();
-            id_signal()
-        }
     }
 
     /// Note: this is the ONLY public function
