@@ -165,9 +165,11 @@ mod tabbed_ui {
 /// Document UI - should have know knowledge or dependencies on the tabbed UI
 ///
 mod document {
-    use dioxus_router::prelude::{Outlet, Routable, Router};
+    use dioxus_router::{hooks::use_route, prelude::{Outlet, Routable, Router, RouterConfig}};
     use freya::prelude::*;
     use crate::{DOCUMENTS};
+
+    static DOCUMENTS_ROUTER: GlobalSignal<DocumentRoute> = GlobalSignal::new(|| DocumentRoute::DocumentOverview);
 
     /// This route should not have any document ids in the paths.  "/" should refer to 'the current document'
     #[derive(Routable, Clone, PartialEq)]
@@ -217,7 +219,9 @@ mod document {
         if let Some(id_to_use) = id.clone() {
             println!("have id, id_to_use: {}", id_to_use);
             rsx!(
-                Router::<DocumentRoute> {}
+                Router::<DocumentRoute> {
+                    config: || RouterConfig::default().initial_route(DOCUMENTS_ROUTER())
+                }
             )
         } else {
             println!("waiting for id");
@@ -232,10 +236,16 @@ mod document {
     #[allow(non_snake_case)]
     #[component]
     fn DocumentLayout() -> Element {
+        let route = use_route::<DocumentRoute>();
         let id_signal: Signal<Option::<String>> = use_context();
         let id = id_signal.clone().unwrap();
 
         println!("DocumentLayout. id: {}", id);
+
+        use_effect(use_reactive!(|route| {
+            *DOCUMENTS_ROUTER.write_unchecked() = route;
+            println!("UPDATED");
+        }));
 
         rsx!(
             NativeRouter {
